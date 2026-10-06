@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACMI Scanner</title>
+<meta name="description" content="Photograph a medication list, get the Anticholinergic Medication Index and STOPP v3 criteria to consider, then build a deprescribing plan. Runs entirely on the phone.">
+<link rel="icon" href="assets/favicon.png">
+<meta property="og:title" content="ACMI Scanner">
+<meta property="og:description" content="Anticholinergic burden and STOPP v3 deprescribing prompts from a photo of the medication list. On-device, no patient data leaves the phone.">
+<meta property="og:image" content="assets/step3.png">
+<style>
+:root{--plum:#642F6C;--plum2:#905699;--plum3:#F1E6F2;--ink:#1f1a24;--mute:#6b6472;--bg:#fbf9fc;--red:#DA291C;--amber:#ED8B00;--green:#009639}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+a{color:var(--plum)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header{background:linear-gradient(135deg,var(--plum) 0%,#4a1f52 60%,#2f1436 100%);color:#fff;overflow:hidden;position:relative}
+header .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:56px 20px 48px}
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.brand img{width:56px;height:56px;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.brand span{font-weight:700;letter-spacing:.3px;font-size:20px}
+h1{font-size:clamp(34px,5vw,52px);line-height:1.08;margin:0 0 16px;font-weight:800}
+h1 em{font-style:normal;color:#F3D9F7}
+.lead{font-size:18px;opacity:.92;margin:0 0 26px;max-width:540px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 20px;border-radius:999px;font-weight:700;text-decoration:none;border:2px solid transparent;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn.white{background:#fff;color:var(--plum)}
+.btn.ghost{border-color:rgba(255,255,255,.6);color:#fff}
+.btn.plum{background:var(--plum);color:#fff}
+.btn.soft{background:var(--plum3);color:var(--plum)}
+.pill{display:inline-block;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:999px;font-size:13px;margin-right:6px}
+/* phone + animation */
+.stage{position:relative;display:flex;justify-content:center}
+.phone{position:relative;width:300px;aspect-ratio:600/1304;border-radius:44px;background:#111;padding:10px;box-shadow:0 30px 60px rgba(0,0,0,.45),0 0 0 2px #333 inset}
+.screen{position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:#fff}
+.screen img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease}
+.screen img.on{opacity:1}
+.scanframe{position:absolute;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .6s}
+.scanframe.on{opacity:1}
+.scanframe img{position:static;opacity:1;width:92%;height:auto;object-fit:contain;transform:none;transition:none;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.scanline{position:absolute;left:6%;right:6%;height:3px;background:linear-gradient(90deg,transparent,#8ef,transparent);box-shadow:0 0 14px #8ef;animation:scan 2.2s linear infinite}
+@keyframes scan{0%{top:8%}100%{top:92%}}
+.corner{position:absolute;width:34px;height:34px;border:4px solid var(--plum2);opacity:.9}
+.corner.tl{top:12px;left:12px;border-right:0;border-bottom:0}.corner.tr{top:12px;right:12px;border-left:0;border-bottom:0}
+.corner.bl{bottom:12px;left:12px;border-right:0;border-top:0}.corner.br{bottom:12px;right:12px;border-left:0;border-top:0}
+.caption{position:absolute;bottom:-54px;left:0;right:0;text-align:center;font-weight:700;color:#F3D9F7;font-size:15px;transition:opacity .4s}
+/* steps */
+section{padding:64px 0}
+h2{font-size:30px;margin:0 0 8px;color:var(--plum)}
+.sub{color:var(--mute);margin:0 0 28px;font-size:17px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.step{background:#fff;border:2px solid #eee;border-radius:16px;padding:18px;cursor:pointer;transition:border-color .2s,transform .2s,box-shadow .2s}
+.step:hover{transform:translateY(-3px)}
+.step.on{border-color:var(--plum);box-shadow:0 10px 30px rgba(100,47,108,.15)}
+.step .n{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--plum3);color:var(--plum);font-weight:800;margin-bottom:8px}
+.step.on .n{background:var(--plum);color:#fff}
+.step h3{margin:0 0 6px;font-size:17px}
+.step p{margin:0;color:var(--mute);font-size:14px}
+.bar{height:4px;background:#eee;border-radius:2px;margin-top:12px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--plum2)}
+.step.on .bar i{animation:fill 4s linear forwards}
+@keyframes fill{to{width:100%}}
+/* features */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+.card{background:#fff;border-radius:16px;padding:22px;border:1px solid #eee}
+.card h3{margin:0 0 8px;font-size:17px;color:var(--plum)}
+.card p{margin:0;color:var(--mute);font-size:15px}
+.score{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border-left:5px solid var(--red);padding:14px 16px;border-radius:8px;font-size:14px;overflow-x:auto}
+/* download */
+.dl{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.dl .card{border:2px solid var(--plum3)}
+.dl h3{font-size:20px}
+.small{font-size:13px;color:var(--mute)}
+.notice{background:#FFF4E5;border-left:5px solid var(--amber);padding:14px 16px;border-radius:8px;font-size:15px}
+footer{background:#2f1436;color:#ddd;padding:36px 0;font-size:14px}
+footer a{color:#F3D9F7}
+.logos{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:12px}
+.logos img{height:64px;background:#fff;border-radius:10px;padding:6px}
+@media(max-width:860px){header .wrap{grid-template-columns:1fr;padding-top:40px}.stage{margin-top:30px;margin-bottom:60px}.steps{grid-template-columns:1fr 1fr}.dl{grid-template-columns:1fr}}
+@media(max-width:520px){.steps{grid-template-columns:1fr}.phone{width:260px}}
+@media(prefers-reduced-motion:reduce){.scanline{animation:none}.step.on .bar i{animation:none;width:100%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div>
+      <div class="brand"><img src="assets/icon.png" alt=""><span>ACMI Scanner</span></div>
+      <h1>Anticholinergic burden and <em>deprescribing prompts</em> from a photo of the medication list.</h1>
+      <p class="lead">Point the camera at a repeat list. Get the Anticholinergic Medication Index, the STOPP v3 criteria to consider for each contributing drug, and a deprescribing plan with a downloadable report. Everything runs on the phone.</p>
+      <div class="cta">
+        <a class="btn white" href="#download">Download</a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+      <p style="margin-top:18px"><span class="pill">On-device OCR</span><span class="pill">No patient data leaves the phone</span><span class="pill">Android and iPhone</span><span class="pill">Free</span></p>
+    </div>
+
+    <div class="stage">
+      <div class="phone" aria-hidden="true">
+        <div class="screen" id="screen">
+          <div class="scanframe on" data-frame="0">
+            <img src="assets/test_list_1.png" alt="">
+            <div class="scanline"></div>
+            <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+          </div>
+          <img src="assets/step1.png" alt="" data-frame="1">
+          <img src="assets/step2.png" alt="" data-frame="2">
+          <img src="assets/step3.png" alt="" data-frame="3">
+          <img src="assets/step4.png" alt="" data-frame="4">
+        </div>
+        <div class="caption" id="caption">Scanning the repeat list…</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <h2>Five steps, under a minute</h2>
+    <p class="sub">Click a step to see it on the phone.</p>
+    <div class="steps" id="steps">
+      <div class="step on" data-frame="0"><span class="n">0</span><h3>Scan</h3><p>Camera, a saved photo, or paste text. Text recognition runs on the device.</p><div class="bar"><i></i></div></div>
+      <div class="step" data-frame="1"><span class="n">1</span><h3>ACMI</h3><p>Score, category and a one-line summary for the notes. Brand matches flagged for you to confirm.</p><div class="bar"><i></i></div></div>
+      <div class="step" data-frame="2"><span class="n">2</span><h3>Refine</h3><p>Optional clinical context tick boxes and an end-of-life mode that separates symptom-control medicines.</p><div class="bar"><i></i></div></div>
+      <div class="step" data-frame="3"><span class="n">3</span><h3>STOPP</h3><p>STOPP v3 criteria for each contributing drug, collapsed per medicine, with a tick box to consider deprescribing.</p><div class="bar"><i></i></div></div>
+      <div class="step" data-frame="4"><span class="n">4</span><h3>Plan</h3><p>Taper, cautions and monitoring prompts, ACMI before and after, and a downloadable report.</p><div class="bar"><i></i></div></div>
+    </div>
+  </div>
+</section>
+
+<section style="background:#fff">
+  <div class="wrap">
+    <h2>What you get in the notes</h2>
+    <p class="sub">One line, computed in code, never by a language model.</p>
+    <div class="score">ACMI: morphine 1.5 + oxybutynin 1.2 + furosemide 1.1 + amitriptyline 1.0 = 4.8 (High)</div>
+    <div class="grid" style="margin-top:28px">
+      <div class="card"><h3>88-drug ACMI</h3><p>Generic matching with UK brand and combination-product mapping. Each ingredient scores once; PRN only if every entry is PRN. Topical preparations and Buscopan are never scored.</p></div>
+      <div class="card"><h3>Reads real lists</h3><p>Uses only the current/repeat section when an acute section is present, ignores stopped items, and merges direction lines with the medicine above.</p></div>
+      <div class="card"><h3>STOPP v3 built in</h3><p>Criterion text verbatim from O'Mahony et al. 2023. List-level rules (M1, A3, L2, L3) and route-dependent advice for inhaled versus systemic glycopyrronium.</p></div>
+      <div class="card"><h3>End-of-life mode</h3><p>Mark symptom-control medicines; their criteria collapse and everything else is flagged for review, rather than hiding all prompts.</p></div>
+      <div class="card"><h3>Deprescribing plan</h3><p>Generic taper, cautions and "restart if" prompts per drug class, with drug-specific notes such as furosemide in heart failure.</p></div>
+      <div class="card"><h3>Private by design</h3><p>No account, no network calls, no stored photos or text. Only anonymous usage counters, which you choose whether to share.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <h2>Download</h2>
+    <p class="sub">Evaluation release for registered healthcare professionals. Version 1.1.</p>
+    <div class="dl">
+      <div class="card">
+        <h3>Android</h3>
+        <p>Signed APK, about 15 MB, Android 8 or later (arm64).</p>
+        <p><a class="btn plum" href="https://github.com/mjb302/acmi-scanner/releases/latest/download/ACMI-Scanner.apk">Download APK</a></p>
+        <p class="small">Open the file on the phone and allow installs from your browser or Files app when asked. Samsung phones: switch Auto Blocker off first (Settings, Security and privacy). A Google Play listing will follow.</p>
+      </div>
+      <div class="card">
+        <h3>iPhone</h3>
+        <p>TestFlight beta coming soon. Register interest and you will receive the TestFlight link when it opens.</p>
+        <p><a class="btn soft" href="mailto:matthew.butler2@nhs.net?subject=ACMI%20Scanner%20iPhone%20beta">Register interest</a></p>
+        <p class="small">Requires iOS 16 or later. The Apple Watch companion app lets you dictate drug names for a quick score.</p>
+      </div>
+    </div>
+    <p class="notice" style="margin-top:22px"><strong>Decision support only.</strong> ACMI Scanner does not provide medical advice and does not replace clinical judgement or the full medication record. It is intended for registered healthcare professional prescribers and is currently an evaluation release, not a regulated medical device. Verify every result against the source list before acting.</p>
+    <p style="margin-top:14px"><a href="assets/test_list_1.png">Try it on this sample list</a> (expected result: 7.3, High). Read the <a href="privacy.html">privacy notice</a>.</p>
+  </div>
+</section>
+
+<section style="background:#fff">
+  <div class="wrap">
+    <h2>References and licence</h2>
+    <div class="grid">
+      <div class="card"><h3>ACMI</h3><p>Best K, Alderson SL, Alldred DP, et al. Development of the anticholinergic medication index (ACMI). Age and Ageing 2022;51:afac035. <a href="https://doi.org/10.1093/ageing/afac035">doi:10.1093/ageing/afac035</a></p><p style="margin-top:8px">The anticholinergic medication index and dementia risk: evidence from the UK Biobank and All of Us research program. Age and Ageing 2025:afaf326. <a href="https://doi.org/10.1093/ageing/afaf326">doi:10.1093/ageing/afaf326</a></p></div>
+      <div class="card"><h3>STOPP/START v3</h3><p>O'Mahony D et al. STOPP/START criteria for potentially inappropriate prescribing in older people: version 3. Eur Geriatr Med 2023;14(4):625-632. <a href="https://doi.org/10.1007/s41999-023-00777-y">doi:10.1007/s41999-023-00777-y</a>. Licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Criterion text unchanged; criterion type and trigger fields added by the app author. START criteria are not yet implemented.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <strong>Dr Matthew Butler</strong> MBBS BSc MRCP PGCert<br>
+    Consultant Geriatrician and Clinical Lead for End of Life Care, Cambridge University Hospitals NHS Foundation Trust<br>
+    <a href="mailto:matthew.butler2@nhs.net">matthew.butler2@nhs.net</a> · <a href="privacy.html">Privacy</a> · <a href="https://github.com/mjb302/acmi-scanner">GitHub</a>
+    <div class="logos"><img src="assets/enrich_logo.png" alt="EnRICH"></div>
+    <p class="small" style="color:#bbb;margin-top:16px">Developed alongside the EnRICH care home programme, Cambridge. ACMI Scanner is an independent evaluation tool and is not endorsed by the authors of the ACMI or STOPP/START criteria.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var frames=[].slice.call(document.querySelectorAll('#screen [data-frame]'));
+  var steps=[].slice.call(document.querySelectorAll('#steps .step'));
+  var caps=['Scanning the repeat list…','Step 1: ACMI score and one-line summary','Step 2: clinical context and end-of-life mode','Step 3: STOPP v3 criteria per drug','Step 4: deprescribing plan and report'];
+  var cap=document.getElementById('caption'), cur=0, timer;
+  function show(n){
+    cur=n;
+    frames.forEach(function(f){f.classList.toggle('on',+f.getAttribute('data-frame')===n)});
+    steps.forEach(function(s){var on=+s.getAttribute('data-frame')===n;s.classList.toggle('on',on);if(on){var b=s.querySelector('.bar i');b.style.animation='none';void b.offsetWidth;b.style.animation='';}});
+    cap.textContent=caps[n];
+  }
+  function next(){show((cur+1)%frames.length)}
+  function start(){clearInterval(timer);timer=setInterval(next,4000)}
+  steps.forEach(function(s){s.addEventListener('click',function(){show(+s.getAttribute('data-frame'));start();})});
+  show(0);
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches) start();
+})();
+</script>
+</body>
+</html>
