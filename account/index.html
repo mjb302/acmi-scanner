@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ACMI Scanner account</title>
+<link rel="icon" href="../assets/favicon.png">
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f1a24;background:#fbf9fc;line-height:1.55}
+.wrap{max-width:520px;margin:0 auto;padding:36px 20px}
+h1{color:#642F6C;font-size:26px;margin:0 0 6px}h2{color:#642F6C;font-size:19px;margin:26px 0 8px}
+a{color:#642F6C}
+.card{background:#fff;border:1px solid #e6dde8;border-radius:12px;padding:20px;margin-top:16px}
+label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+input{width:100%;box-sizing:border-box;font-size:16px;padding:10px 12px;border:1px solid #cdbfd1;border-radius:8px;background:#fff}
+button{font-size:16px;padding:11px 18px;border-radius:8px;border:0;background:#642F6C;color:#fff;font-weight:600;cursor:pointer;margin-top:14px}
+button.secondary{background:#f1e6f2;color:#642F6C}
+button.danger{background:#b3261e}
+button:disabled{opacity:.5;cursor:default}
+.msg{margin-top:12px;font-size:15px}.msg.err{color:#b3261e}.msg.ok{color:#1b6e3a}
+.muted{color:#5a5262;font-size:14px}
+.hidden{display:none}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+<p><a href="../index.html">← ACMI Scanner</a></p>
+<h1>Your ACMI Scanner account</h1>
+<p class="muted">Accounts are for registered healthcare professionals with an nhs.net address. MB Clinical Limited holds only your name, role and email; see the <a href="../privacy.html">privacy notice</a>.</p>
+
+<div id="loading" class="card">Checking your link…</div>
+
+<div id="setpw" class="card hidden">
+  <h2 id="setpw-title">Set your password</h2>
+  <p class="muted" id="setpw-sub">Your email address is verified. Choose a password of at least 10 characters with letters and numbers, then return to the app and sign in.</p>
+  <label for="pw1">New password</label><input id="pw1" type="password" autocomplete="new-password" minlength="10">
+  <label for="pw2">Repeat password</label><input id="pw2" type="password" autocomplete="new-password" minlength="10">
+  <button id="setpw-btn">Save password</button>
+  <div id="setpw-msg" class="msg"></div>
+</div>
+
+<div id="done" class="card hidden">
+  <h2>Password saved</h2>
+  <p>Open ACMI Scanner on your phone and sign in with your nhs.net email and the password you just set.</p>
+  <button class="secondary" id="done-signout">Sign out of this page</button>
+</div>
+
+<div id="signin" class="card hidden">
+  <h2>Sign in</h2>
+  <p class="muted">To change your password, download your data or delete your account. New users: create the account in the app first; it sends you the verification link.</p>
+  <label for="si-email">nhs.net email</label><input id="si-email" type="email" autocomplete="username" inputmode="email">
+  <label for="si-pw">Password</label><input id="si-pw" type="password" autocomplete="current-password">
+  <div class="row"><button id="si-btn">Sign in</button><button class="secondary" id="si-forgot">Forgot password</button></div>
+  <div id="si-msg" class="msg"></div>
+</div>
+
+<div id="account" class="card hidden">
+  <h2>Account</h2>
+  <p id="acct-details"></p>
+  <h2>Change password</h2>
+  <label for="cp1">New password</label><input id="cp1" type="password" autocomplete="new-password" minlength="10">
+  <button id="cp-btn">Change password</button>
+  <div id="cp-msg" class="msg"></div>
+  <h2>Your data</h2>
+  <p class="muted">Download everything we hold about you as a JSON file (your profile and the times you accepted the in-app disclaimer).</p>
+  <button class="secondary" id="export-btn">Download my data</button>
+  <div id="export-msg" class="msg"></div>
+  <h2>Delete account</h2>
+  <p class="muted">Removes your account and all records immediately. Usage counters stay on your phone. You can create a new account later.</p>
+  <label><input type="checkbox" id="del-confirm" style="width:auto"> I understand this cannot be undone</label>
+  <button class="danger" id="del-btn" disabled>Delete my account</button>
+  <div id="del-msg" class="msg"></div>
+  <p style="margin-top:22px"><button class="secondary" id="acct-signout">Sign out</button></p>
+</div>
+
+<p class="muted" style="margin-top:28px">Questions: <a href="mailto:matthew.butler2@nhs.net">matthew.butler2@nhs.net</a></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(async function () {
+  // Public values by design; row-level security protects the data.
+  const SUPABASE_URL = 'https://goqcrklierhzeluvwhgq.supabase.co';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWNya2xpZXJoemVsdXZ3aGdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzk0MzIsImV4cCI6MjEwNjk1NTQzMn0.vsgPlDBykNWUnO1Liv7U-MyVfl8y0AZaqI8ySxJ1AI8';
+  const $ = id => document.getElementById(id);
+  const show = id => { for (const s of ['loading','setpw','done','signin','account']) $(s).classList.toggle('hidden', s !== id); };
+  const say = (id, text, ok) => { const m = $(id); m.textContent = text; m.className = 'msg ' + (ok ? 'ok' : 'err'); };
+  const pwOk = p => p.length >= 10 && /[A-Za-z]/.test(p) && /[0-9]/.test(p);
+
+  if (SUPABASE_URL.includes('PROJECT_REF') || ANON_KEY === 'REPLACE_ME') {
+    $('loading').textContent = 'The account service is not configured yet.'; return;
+  }
+  const sb = supabase.createClient(SUPABASE_URL, ANON_KEY, { auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true } });
+
+  // Errors arrive in the hash, e.g. #error=access_denied&error_code=otp_expired
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const linkType = hash.get('type');
+  if (hash.get('error')) {
+    const code = hash.get('error_code') || '';
+    $('loading').innerHTML = code === 'otp_expired'
+      ? 'That link has expired or was already used. Open the app and tap <strong>Resend email</strong> (new accounts) or use <strong>Forgot password</strong> below.'
+      : 'That link could not be used: ' + (hash.get('error_description') || code).replace(/\+/g, ' ') + '.';
+    const si = $('signin'); si.classList.remove('hidden'); return;
+  }
+
+  let { data: { session } } = await sb.auth.getSession();
+  if (!session && location.hash.includes('access_token')) {
+    await new Promise(r => setTimeout(r, 600));
+    session = (await sb.auth.getSession()).data.session;
+  }
+  history.replaceState(null, '', location.pathname);
+
+  const fresh = ['magiclink', 'signup', 'recovery', 'invite', 'email'].includes(linkType || '');
+  if (session && fresh) {
+    if (linkType === 'recovery') { $('setpw-title').textContent = 'Set a new password'; $('setpw-sub').textContent = 'Choose a password of at least 10 characters with letters and numbers, then sign in again in the app.'; }
+    show('setpw');
+  } else if (session) {
+    await renderAccount(session);
+  } else {
+    show('signin');
+  }
+
+  $('setpw-btn').onclick = async () => {
+    const p1 = $('pw1').value, p2 = $('pw2').value;
+    if (!pwOk(p1)) return say('setpw-msg', 'Use at least 10 characters including letters and numbers.');
+    if (p1 !== p2) return say('setpw-msg', 'The two passwords do not match.');
+    $('setpw-btn').disabled = true;
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    $('setpw-btn').disabled = false;
+    if (error) return say('setpw-msg', error.message);
+    show('done');
+  };
+  $('done-signout').onclick = async () => { await sb.auth.signOut(); show('signin'); };
+
+  $('si-btn').onclick = async () => {
+    const email = $('si-email').value.trim().toLowerCase(), password = $('si-pw').value;
+    if (!email.endsWith('@nhs.net')) return say('si-msg', 'Please use your nhs.net address.');
+    $('si-btn').disabled = true;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    $('si-btn').disabled = false;
+    if (error) return say('si-msg', error.message === 'Invalid login credentials' ? 'Email or password incorrect. If you have not set a password yet, open the link in your sign-up email first.' : error.message);
+    await renderAccount(data.session);
+  };
+  $('si-forgot').onclick = async () => {
+    const email = $('si-email').value.trim().toLowerCase();
+    if (!email.endsWith('@nhs.net')) return say('si-msg', 'Enter your nhs.net address first.');
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    say('si-msg', error ? error.message : 'If that address has an account, a reset link is on its way. Check junk too.', !error);
+  };
+
+  async function renderAccount(sess) {
+    const { data: rows } = await sb.from('profiles').select('full_name, role, email, created_at').eq('id', sess.user.id);
+    const p = (rows && rows[0]) || { full_name: sess.user.user_metadata?.full_name || '', role: sess.user.user_metadata?.role || '', email: sess.user.email, created_at: sess.user.created_at };
+    $('acct-details').innerHTML = `<strong>${esc(p.full_name)}</strong><br>${esc(p.role)}<br>${esc(p.email)}<br><span class="muted">Account created ${new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>`;
+    show('account');
+  }
+  function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  $('cp-btn').onclick = async () => {
+    const p = $('cp1').value;
+    if (!pwOk(p)) return say('cp-msg', 'Use at least 10 characters including letters and numbers.');
+    const { error } = await sb.auth.updateUser({ password: p });
+    say('cp-msg', error ? error.message : 'Password changed.', !error);
+    if (!error) $('cp1').value = '';
+  };
+  $('export-btn').onclick = async () => {
+    const { data, error } = await sb.rpc('export_my_data');
+    if (error) return say('export-msg', error.message);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'acmi-scanner-my-data.json'; a.click();
+    say('export-msg', 'Downloaded.', true);
+  };
+  $('del-confirm').onchange = e => { $('del-btn').disabled = !e.target.checked; };
+  $('del-btn').onclick = async () => {
+    $('del-btn').disabled = true;
+    const { error } = await sb.rpc('delete_own_account');
+    if (error) { $('del-btn').disabled = false; return say('del-msg', error.message); }
+    await sb.auth.signOut();
+    say('del-msg', 'Your account has been deleted.', true);
+    setTimeout(() => show('signin'), 1500);
+  };
+  $('acct-signout').onclick = async () => { await sb.auth.signOut(); show('signin'); };
+})();
+</script>
+</body>
+</html>
