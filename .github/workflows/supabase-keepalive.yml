@@ -1,0 +1,56 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase projects are paused after 7 days without API traffic
+# (acmi-scanner was paused on 19 Oct 2026). This pings the project's public
+# endpoints daily with the anon key, which is already public in account/index.html
+# and the app binaries. The timestamp commit keeps the repo active so GitHub does
+# not disable the schedule after 60 days of repo inactivity.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # daily 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SUPABASE_URL: https://goqcrklierhzeluvwhgq.supabase.co
+  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read anon key from account page if no secret is set
+        if: env.SUPABASE_ANON_KEY == ''
+        run: |
+          KEY=$(grep -o 'eyJhbGciOiJI[A-Za-z0-9._-]*' account/index.html | head -1)
+          test -n "$KEY"
+          echo "SUPABASE_ANON_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Ping Auth and REST endpoints
+        run: |
+          set -e
+          auth=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/auth/v1/settings")
+          rest=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/invite_codes?select=code&limit=1")
+          echo "auth/v1/settings -> $auth, rest/v1/invite_codes -> $rest"
+          # 200 from auth is enough; REST may return 200 (RLS filtered) or 401/404 and still counts as traffic
+          test "$auth" = "200"
+
+      - name: Record timestamp (keeps the schedule enabled)
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/supabase-keepalive.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/supabase-keepalive.txt
+          git commit -m "Supabase keep-alive ping" || exit 0
+          git push
