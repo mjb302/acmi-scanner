@@ -1,10 +1,12 @@
 name: Supabase keep-alive
 
-# Free-tier Supabase projects are paused after 7 days without API traffic
-# (acmi-scanner was paused on 19 Oct 2026). This pings the project's public
-# endpoints daily with the anon key, which is already public in account/index.html
-# and the app binaries. The timestamp commit keeps the repo active so GitHub does
-# not disable the schedule after 60 days of repo inactivity.
+# Free-tier Supabase projects are paused after 7 days without activity.
+# Anonymous pings of auth/v1/settings and a 401 on REST did NOT count:
+# the project was paused on 19 Oct and again on 26 Oct 2026 despite daily
+# successful pings. This version writes a row to public.keepalive with the
+# service role key (GitHub secret SUPABASE_SERVICE_ROLE_KEY), which is a real
+# database transaction, and prunes rows older than 30 days. The timestamp
+# commit keeps the repo active so GitHub does not disable the schedule.
 
 on:
   schedule:
@@ -16,7 +18,7 @@ permissions:
 
 env:
   SUPABASE_URL: https://goqcrklierhzeluvwhgq.supabase.co
-  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
 jobs:
   ping:
@@ -24,26 +26,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read anon key from account page if no secret is set
-        if: env.SUPABASE_ANON_KEY == ''
-        run: |
-          KEY=$(grep -o 'eyJhbGciOiJI[A-Za-z0-9._-]*' account/index.html | head -1)
-          test -n "$KEY"
-          echo "SUPABASE_ANON_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Check the secret is present
+        run: test -n "$SUPABASE_SERVICE_ROLE_KEY"
 
-      - name: Ping Auth and REST endpoints
+      - name: Write a keepalive row (real database activity)
         run: |
           set -e
-          auth=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/auth/v1/settings")
-          rest=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/rest/v1/invite_codes?select=code&limit=1")
-          echo "auth/v1/settings -> $auth, rest/v1/invite_codes -> $rest"
-          # 200 from auth is enough; REST may return 200 (RLS filtered) or 401/404 and still counts as traffic
-          test "$auth" = "200"
+          code=$(curl -s -o /tmp/ins.txt -w "%{http_code}" -X POST \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"source\":\"github-actions\",\"run_id\":\"${GITHUB_RUN_ID}\"}" \
+            "$SUPABASE_URL/rest/v1/keepalive")
+          echo "insert -> $code: $(head -c 200 /tmp/ins.txt)"
+          test "$code" = "201"
+
+      - name: Prune keepalive rows older than 30 days
+        run: |
+          cutoff=$(date -u -d '30 days ago' +"%Y-%m-%dT%H:%M:%SZ")
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "$SUPABASE_URL/rest/v1/keepalive?pinged_at=lt.$cutoff")
+          echo "prune -> $code"
+          test "$code" = "204" -o "$code" = "200"
+
+      - name: Read back the latest row (REST select)
+        run: |
+          curl -s -f \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "$SUPABASE_URL/rest/v1/keepalive?select=pinged_at,source&order=pinged_at.desc&limit=1"
 
       - name: Record timestamp (keeps the schedule enabled)
         run: |
